@@ -1,0 +1,7 @@
+# CryptoJandie Requirements
+customtkinter>=5.2.0  # Modern tkinter UI library with dark mode support
+pillow>=10.0.0  # For image handling
+matplotlib>=3.7.2  # For charts and visualizations
+pandas>=2.0.0  # For data manipulation and analysis
+requests>=2.31.0  # For API calls
+python-dateutil>=2.8.2  # For date handling 
