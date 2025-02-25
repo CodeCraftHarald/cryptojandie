@@ -177,7 +177,8 @@ class Database:
             "SELECT * FROM users WHERE username = ?",
             (username,)
         )
-        return dict(self.cursor.fetchone()) if self.cursor.fetchone() else None
+        row = self.cursor.fetchone()
+        return dict(row) if row else None
         
     def update_user_login(self, user_id):
         """Update user's last login time."""
@@ -300,4 +301,17 @@ class Database:
             ORDER BY t.timestamp DESC
             LIMIT ?
         """, (user_id, limit))
-        return [dict(row) for row in self.cursor.fetchall()] 
+        return [dict(row) for row in self.cursor.fetchall()]
+        
+    def delete_transaction(self, transaction_id, user_id):
+        """Delete a transaction by ID and user ID for security."""
+        try:
+            self.cursor.execute(
+                "DELETE FROM transactions WHERE id = ? AND user_id = ?",
+                (transaction_id, user_id)
+            )
+            self.connection.commit()
+            return self.cursor.rowcount > 0  # Returns True if a row was deleted
+        except Exception as e:
+            print(f"Error deleting transaction: {str(e)}")
+            return False 

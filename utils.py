@@ -87,18 +87,27 @@ def create_pie_chart(holdings, current_prices, width=800, height=500):
     
     total_value = 0
     for holding in holdings:
-        price = current_prices.get(holding.asset_id, 0)
-        value = holding.amount * price
+        # Access as dictionary keys instead of attributes
+        asset_id = holding['asset_id'] if isinstance(holding, dict) else holding.asset_id
+        amount = holding['amount'] if isinstance(holding, dict) else holding.amount
+        
+        price = current_prices.get(asset_id, 0)
+        value = amount * price
         total_value += value
         
     for i, holding in enumerate(holdings):
-        price = current_prices.get(holding.asset_id, 0)
-        value = holding.amount * price
+        # Access as dictionary keys instead of attributes
+        asset_id = holding['asset_id'] if isinstance(holding, dict) else holding.asset_id
+        amount = holding['amount'] if isinstance(holding, dict) else holding.amount
+        symbol = holding['symbol'] if isinstance(holding, dict) else holding.symbol
+        
+        price = current_prices.get(asset_id, 0)
+        value = amount * price
         percentage = (value / total_value) * 100 if total_value > 0 else 0
         
         if percentage > 1:  # Only show assets with more than 1% in the pie chart
             data.append(value)
-            labels.append(f"{holding.symbol} ({percentage:.1f}%)")
+            labels.append(f"{symbol} ({percentage:.1f}%)")
     
     # Create figure
     fig = Figure(figsize=(width/100, height/100), dpi=100)
@@ -129,18 +138,29 @@ def create_bar_chart(holdings, current_prices, width=800, height=500):
     values = []
     
     # Sort holdings by value (descending)
+    def get_value(h):
+        # Access as dictionary keys instead of attributes
+        asset_id = h['asset_id'] if isinstance(h, dict) else h.asset_id
+        amount = h['amount'] if isinstance(h, dict) else h.amount
+        return amount * current_prices.get(asset_id, 0)
+        
     sorted_holdings = sorted(
         holdings,
-        key=lambda h: h.amount * current_prices.get(h.asset_id, 0),
+        key=get_value,
         reverse=True
     )
     
     # Take top 15 holdings
     for holding in sorted_holdings[:15]:
-        price = current_prices.get(holding.asset_id, 0)
-        value = holding.amount * price
+        # Access as dictionary keys instead of attributes
+        asset_id = holding['asset_id'] if isinstance(holding, dict) else holding.asset_id
+        amount = holding['amount'] if isinstance(holding, dict) else holding.amount
+        symbol = holding['symbol'] if isinstance(holding, dict) else holding.symbol
         
-        symbols.append(holding.symbol)
+        price = current_prices.get(asset_id, 0)
+        value = amount * price
+        
+        symbols.append(symbol)
         values.append(value)
     
     # Create figure

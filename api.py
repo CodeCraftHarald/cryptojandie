@@ -49,16 +49,25 @@ class CryptoAPI:
             if response.status_code == 200:
                 data = response.json()
                 if coingecko_id in data:
-                    return {
-                        "price_usd": data[coingecko_id]["usd"],
-                        "market_cap": data[coingecko_id].get("usd_market_cap", 0)
-                    }, None
+                    try:
+                        price_usd = data[coingecko_id].get("usd", 0)
+                        market_cap = data[coingecko_id].get("usd_market_cap", 0)
+                        
+                        return {
+                            "price_usd": price_usd,
+                            "market_cap": market_cap
+                        }, None
+                    except Exception as e:
+                        print(f"Error parsing API response for {coingecko_id}: {str(e)}")
+                        print(f"Response data: {data}")
+                        return None, f"Error parsing API response: {str(e)}"
                 else:
                     return None, "Cryptocurrency not found in API response."
             else:
                 return None, f"API request failed with status code {response.status_code}."
                 
         except Exception as e:
+            print(f"API request error for {coingecko_id}: {str(e)}")
             return None, f"API request error: {str(e)}"
             
     def get_multiple_prices(self, coingecko_ids):
@@ -83,16 +92,25 @@ class CryptoAPI:
                 
                 for coin_id in coingecko_ids:
                     if coin_id in data:
-                        results[coin_id] = {
-                            "price_usd": data[coin_id]["usd"],
-                            "market_cap": data[coin_id].get("usd_market_cap", 0)
-                        }
+                        try:
+                            price_usd = data[coin_id].get("usd", 0)
+                            market_cap = data[coin_id].get("usd_market_cap", 0)
+                            
+                            results[coin_id] = {
+                                "price_usd": price_usd,
+                                "market_cap": market_cap
+                            }
+                        except Exception as e:
+                            print(f"Error parsing API response for {coin_id}: {str(e)}")
+                            print(f"Response data for {coin_id}: {data.get(coin_id, 'Not found')}")
                 
                 return results, None
             else:
                 return None, f"API request failed with status code {response.status_code}."
                 
         except Exception as e:
+            print(f"API request error for multiple prices: {str(e)}")
+            print(f"Coin IDs: {coingecko_ids}")
             return None, f"API request error: {str(e)}"
             
     def search_cryptocurrency(self, query):

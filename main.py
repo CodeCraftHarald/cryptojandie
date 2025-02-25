@@ -11,6 +11,9 @@ from database import Database
 from api import CryptoAPI
 from ui.login import LoginScreen
 from ui.dashboard import PortfolioDashboard
+from ui.assets import AssetManagement
+from ui.analysis import AnalysisDashboard
+from ui.settings import SettingsPage
 
 # Set appearance mode and default color theme
 ctk.set_appearance_mode("dark")  # Options: "dark" (default), "light", "system"
@@ -106,6 +109,34 @@ class CryptoJandieApp:
             self.refresh_prices
         )
         self.dashboard.grid(row=0, column=0, padx=0, pady=0, sticky="nsew")
+        
+        # Load assets management content
+        self.assets = AssetManagement(
+            self.tab_assets,
+            self.current_user,
+            self.db,
+            self.api,
+            self.refresh_prices
+        )
+        self.assets.grid(row=0, column=0, padx=0, pady=0, sticky="nsew")
+        
+        # Load analysis dashboard content
+        self.analysis = AnalysisDashboard(
+            self.tab_analysis,
+            self.current_user,
+            self.db,
+            self.api
+        )
+        self.analysis.grid(row=0, column=0, padx=0, pady=0, sticky="nsew")
+        
+        # Load settings content
+        self.settings_page = SettingsPage(
+            self.tab_settings,
+            self.current_user,
+            self.db,
+            self
+        )
+        self.settings_page.grid(row=0, column=0, padx=0, pady=0, sticky="nsew")
         
         # Set current frame for future destruction
         self.current_frame = self.main_frame
