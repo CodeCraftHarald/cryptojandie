@@ -2,12 +2,13 @@ from datetime import datetime
 import json
 
 class User:
-    def __init__(self, id=None, username=None, created_at=None, last_login=None, settings=None):
+    def __init__(self, id=None, username=None, created_at=None, last_login=None, settings=None, password=None):
         self.id = id
         self.username = username
         self.created_at = created_at if created_at else datetime.now()
         self.last_login = last_login
         self.settings = settings if settings else {}
+        self.password = password
         
     @classmethod
     def from_db(cls, db_dict):
@@ -27,7 +28,8 @@ class User:
             username=db_dict.get('username'),
             created_at=db_dict.get('created_at'),
             last_login=db_dict.get('last_login'),
-            settings=settings
+            settings=settings,
+            password=db_dict.get('password')
         )
         
     def to_dict(self):
@@ -37,7 +39,8 @@ class User:
             'username': self.username,
             'created_at': self.created_at,
             'last_login': self.last_login,
-            'settings': self.settings
+            'settings': self.settings,
+            'password': self.password
         }
 
 class Asset:

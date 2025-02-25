@@ -7,6 +7,9 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib
 matplotlib.use("TkAgg")
+import os
+import hashlib
+import binascii
 
 def format_currency(value, currency="$"):
     """Format a number as currency."""
@@ -196,4 +199,22 @@ def embed_chart(fig, master):
     """Embed a matplotlib figure in a Tkinter window."""
     canvas = FigureCanvasTkAgg(fig, master=master)
     canvas.draw()
-    return canvas.get_tk_widget() 
+    return canvas.get_tk_widget()
+
+def hash_password(password, salt=None):
+    """Hash a password with a randomly-generated salt if not provided."""
+    if salt is None:
+        salt = os.urandom(16)
+    dk = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
+    # Store salt and hash as hex strings separated by a $
+    return binascii.hexlify(salt).decode('ascii') + '$' + binascii.hexlify(dk).decode('ascii')
+
+def verify_password(stored_password, provided_password):
+    """Verify a password against the stored hash."""
+    try:
+        salt_hex, hash_hex = stored_password.split('$')
+        salt = binascii.unhexlify(salt_hex.encode('ascii'))
+        dk = hashlib.pbkdf2_hmac('sha256', provided_password.encode('utf-8'), salt, 100000)
+        return hash_hex == binascii.hexlify(dk).decode('ascii')
+    except Exception as e:
+        return False 

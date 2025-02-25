@@ -17,7 +17,7 @@ class LoginScreen(ctk.CTkFrame):
         # Create main frame
         self.main_frame = ctk.CTkFrame(self)
         self.main_frame.grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
-        self.main_frame.grid_rowconfigure((0, 1, 2, 3, 4, 5), weight=1)
+        self.main_frame.grid_rowconfigure((0, 1, 2, 3, 4, 5, 6, 7), weight=1)
         self.main_frame.grid_columnconfigure(0, weight=1)
         
         # App title
@@ -51,6 +51,23 @@ class LoginScreen(ctk.CTkFrame):
         )
         self.username_entry.grid(row=3, column=0, padx=20, pady=(0, 20), sticky="ew")
         
+        # Password label
+        self.password_label = ctk.CTkLabel(
+            self.main_frame,
+            text="Password:",
+            font=ctk.CTkFont(size=14)
+        )
+        self.password_label.grid(row=4, column=0, padx=20, pady=(20, 5), sticky="w")
+        
+        # Password entry
+        self.password_entry = ctk.CTkEntry(
+            self.main_frame,
+            width=300,
+            placeholder_text="Enter your password",
+            show="*"
+        )
+        self.password_entry.grid(row=5, column=0, padx=20, pady=(0, 20), sticky="ew")
+        
         # Login button
         self.login_button = ctk.CTkButton(
             self.main_frame,
@@ -60,7 +77,7 @@ class LoginScreen(ctk.CTkFrame):
             height=40,
             font=ctk.CTkFont(size=14, weight="bold")
         )
-        self.login_button.grid(row=4, column=0, padx=20, pady=(10, 10), sticky="ew")
+        self.login_button.grid(row=6, column=0, padx=20, pady=(10, 10), sticky="ew")
         
         # Status label
         self.status_label = ctk.CTkLabel(
@@ -69,32 +86,38 @@ class LoginScreen(ctk.CTkFrame):
             font=ctk.CTkFont(size=12),
             text_color="orange"
         )
-        self.status_label.grid(row=5, column=0, padx=20, pady=(5, 20), sticky="ew")
+        self.status_label.grid(row=7, column=0, padx=20, pady=(5, 20), sticky="ew")
         
     def handle_login(self):
         """Handle login button click."""
         username = self.username_entry.get().strip()
-        
-        if not username:
-            self.status_label.configure(text="Please enter a username.")
+        password = self.password_entry.get().strip()
+
+        if not username or not password:
+            self.status_label.configure(text="Please enter both username and password.")
             return
-            
+
         # Check if user exists
         user = self.db.get_user(username)
-        
+
         if user:
-            # Existing user - update last login
+            # Existing user: check password
+            if user.get('password') != password:
+                self.status_label.configure(text="Incorrect password.")
+                return
+
+            # Correct password, update last login
             self.db.update_user_login(user['id'])
             self.status_label.configure(text=f"Welcome back, {username}!")
         else:
-            # New user - create account
+            # New user: create account with standard default password 'password123'
             user_id = self.db.add_user(username)
             if user_id:
-                user = {'id': user_id, 'username': username}
-                self.status_label.configure(text=f"New account created for {username}!")
+                user = {'id': user_id, 'username': username, 'password': 'password123'}
+                self.status_label.configure(text=f"New account created for {username}!\nDefault password is 'password123'.")
             else:
                 self.status_label.configure(text="Error creating user account.")
                 return
-        
+
         # Call the login callback
         self.on_login(user) 

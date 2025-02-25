@@ -11,6 +11,7 @@ class Database:
         self.cursor = None
         self.connect()
         self.create_tables()
+        self.migrate_users_table()
         
     def connect(self):
         """Establish connection to the SQLite database."""
@@ -93,6 +94,15 @@ class Database:
         
         self.connection.commit()
         
+    def migrate_users_table(self):
+        """Migrate users table to add password column if missing."""
+        self.cursor.execute("PRAGMA table_info(users)")
+        columns = self.cursor.fetchall()
+        column_names = [col['name'] for col in columns]
+        if 'password' not in column_names:
+            self.cursor.execute("ALTER TABLE users ADD COLUMN password TEXT DEFAULT 'password123'")
+            self.connection.commit()
+        
     def initialize_default_assets(self):
         """Initialize the database with default cryptocurrency assets."""
         default_assets = [
@@ -162,8 +172,8 @@ class Database:
         """Add a new user to the database."""
         try:
             self.cursor.execute(
-                "INSERT INTO users (username) VALUES (?)",
-                (username,)
+                "INSERT INTO users (username, password) VALUES (?, ?)",
+                (username, "password123")
             )
             self.connection.commit()
             return self.cursor.lastrowid
@@ -186,6 +196,11 @@ class Database:
             "UPDATE users SET last_login = ? WHERE id = ?",
             (datetime.now(), user_id)
         )
+        self.connection.commit()
+        
+    def update_user_password(self, user_id, new_password):
+        """Update the password for the specified user."""
+        self.cursor.execute("UPDATE users SET password = ? WHERE id = ?", (new_password, user_id))
         self.connection.commit()
         
     def add_price(self, asset_id, price_usd, source="manual"):
@@ -245,30 +260,19 @@ class Database:
         self.connection.commit()
         return self.cursor.lastrowid
         
-    def update_holding(self, holding_id, amount, purchase_price_per_unit=None, notes=None):
+    def update_holding(self, user_id, holding_id, amount, purchase_price_per_unit=None, notes=None):
         """Update an existing holding."""
-        query = "UPDATE holdings SET amount = ?"
-        params = [amount]
-        
-        if purchase_price_per_unit is not None:
-            query += ", purchase_price_per_unit = ?"
-            params.append(purchase_price_per_unit)
-            
-        if notes is not None:
-            query += ", notes = ?"
-            params.append(notes)
-            
-        query += " WHERE id = ?"
-        params.append(holding_id)
-        
-        self.cursor.execute(query, params)
+        self.cursor.execute(
+            "UPDATE holdings SET amount = ?, purchase_price_per_unit = ?, notes = ? WHERE id = ? AND user_id = ?",
+            (amount, purchase_price_per_unit, notes, holding_id, user_id)
+        )
         self.connection.commit()
         
-    def delete_holding(self, holding_id):
+    def delete_holding(self, user_id, holding_id):
         """Delete a holding."""
         self.cursor.execute(
-            "DELETE FROM holdings WHERE id = ?",
-            (holding_id,)
+            "DELETE FROM holdings WHERE id = ? AND user_id = ?",
+            (holding_id, user_id)
         )
         self.connection.commit()
         

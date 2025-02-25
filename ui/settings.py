@@ -320,6 +320,49 @@ class SettingsPage(ctk.CTkFrame):
         )
         username_label.grid(row=0, column=0, padx=20, pady=(10, 5), sticky="w")
         
+        # New password label
+        new_password_label = ctk.CTkLabel(
+            account_frame,
+            text="New Password:",
+            font=ctk.CTkFont(size=14)
+        )
+        new_password_label.grid(row=1, column=0, padx=20, pady=(10, 5), sticky="w")
+        
+        # New password entry
+        self.new_password_entry = ctk.CTkEntry(
+            account_frame,
+            width=300,
+            placeholder_text="Enter new password",
+            show="*"
+        )
+        self.new_password_entry.grid(row=2, column=0, padx=20, pady=(0, 5), sticky="ew")
+        
+        # Confirm password label
+        confirm_password_label = ctk.CTkLabel(
+            account_frame,
+            text="Confirm Password:",
+            font=ctk.CTkFont(size=14)
+        )
+        confirm_password_label.grid(row=3, column=0, padx=20, pady=(10, 5), sticky="w")
+        
+        # Confirm password entry
+        self.confirm_password_entry = ctk.CTkEntry(
+            account_frame,
+            width=300,
+            placeholder_text="Confirm new password",
+            show="*"
+        )
+        self.confirm_password_entry.grid(row=4, column=0, padx=20, pady=(0, 10), sticky="ew")
+        
+        # Update password button
+        update_password_button = ctk.CTkButton(
+            account_frame,
+            text="Update Password",
+            command=self.update_password,
+            width=150
+        )
+        update_password_button.grid(row=5, column=0, padx=20, pady=(10, 10), sticky="w")
+        
         # About section
         self.about_section = self.create_section("About CryptoJandie")
         self.about_section.grid(row=5, column=0, padx=0, pady=(0, 20), sticky="ew")
@@ -403,4 +446,23 @@ class SettingsPage(ctk.CTkFrame):
         threshold = round(value * 10) / 10
         self.settings["price_alert_threshold"] = threshold
         self.threshold_var.set(threshold)
-        self.threshold_value_label.configure(text=f"{threshold}%") 
+        self.threshold_value_label.configure(text=f"{threshold}%")
+        
+    def update_password(self):
+        """Update the user's password."""
+        new_password = self.new_password_entry.get().strip()
+        confirm_password = self.confirm_password_entry.get().strip()
+
+        if not new_password or not confirm_password:
+            messagebox.showerror("Error", "Please fill in both password fields.")
+            return
+
+        if new_password != confirm_password:
+            messagebox.showerror("Error", "Passwords do not match.")
+            return
+
+        # Update the password in the database
+        self.db.update_user_password(self.user['id'], new_password)
+        # Update the password in the current user session
+        self.user['password'] = new_password
+        messagebox.showinfo("Success", "Password updated successfully.") 
