@@ -10,6 +10,7 @@ matplotlib.use("TkAgg")
 import os
 import hashlib
 import binascii
+import tkinter as tk
 
 def format_currency(value, currency="$"):
     """Format a number as currency."""
@@ -36,6 +37,51 @@ def calculate_weighted_average(existing_amount, existing_price, new_amount, new_
     if existing_amount + new_amount == 0:
         return 0
     return ((existing_amount * existing_price) + (new_amount * new_price)) / (existing_amount + new_amount)
+
+def convert_comma_to_period(event):
+    """
+    Convert comma input to period input for German keyboard users.
+    This function is meant to be bound to an Entry widget's Key event.
+    
+    Usage:
+        entry_widget.bind("<Key>", convert_comma_to_period)
+    
+    Args:
+        event: The key event containing information about the pressed key.
+        
+    Returns:
+        "break" if a comma was converted to period (to prevent default), None otherwise.
+    """
+    widget = event.widget
+    if event.char == ',':
+        # Calculate current cursor position
+        current_pos = widget.index(tk.INSERT)
+        # Get current content
+        current_text = widget.get()
+        # Create new text with period instead of comma
+        new_text = current_text[:current_pos-1] + '.' + current_text[current_pos:]
+        # Update the content
+        widget.delete(0, tk.END)
+        widget.insert(0, new_text)
+        # Set cursor position after the period
+        widget.icursor(current_pos)
+        # Prevent default comma insertion
+        return "break"
+    return None
+
+def parse_numeric_input(input_str):
+    """
+    Parse numeric input, converting commas to periods for German keyboard users.
+    
+    Args:
+        input_str: The string input that might contain commas as decimal separators.
+        
+    Returns:
+        A string with commas replaced by periods, ready for conversion to float.
+    """
+    if input_str is None:
+        return "0"
+    return input_str.replace(',', '.')
 
 def parse_csv_data(file_path, user_id, db):
     """Parse CSV data for import."""

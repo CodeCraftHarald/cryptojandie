@@ -5,6 +5,7 @@ import threading
 import time
 from datetime import datetime
 from PIL import Image, ImageTk
+import tkinter.messagebox as messagebox
 
 # Import our modules
 from database import Database
@@ -58,6 +59,7 @@ class CryptoJandieApp:
     def on_login(self, user):
         """Handle user login."""
         self.current_user = user
+        print(f"User logged in: {user['username']}")
         
         # Delay to show login success message before switching screens
         self.root.after(1000, self.show_main_app)
@@ -95,12 +97,17 @@ class CryptoJandieApp:
         self.tab_analysis = self.tabview.add("Analysis")
         self.tab_settings = self.tabview.add("Settings")
         
+        # Track loaded states
+        self.analysis_loaded = False
+        self.settings_loaded = False
+        
         # Configure tabs
         for tab in [self.tab_dashboard, self.tab_assets, self.tab_analysis, self.tab_settings]:
             tab.grid_rowconfigure(0, weight=1)
             tab.grid_columnconfigure(0, weight=1)
         
         # Load dashboard content
+        print("Initializing Dashboard...")
         self.dashboard = PortfolioDashboard(
             self.tab_dashboard, 
             self.current_user, 
@@ -111,6 +118,7 @@ class CryptoJandieApp:
         self.dashboard.grid(row=0, column=0, padx=0, pady=0, sticky="nsew")
         
         # Load assets management content
+        print("Initializing Assets Management...")
         self.assets = AssetManagement(
             self.tab_assets,
             self.current_user,
@@ -120,26 +128,70 @@ class CryptoJandieApp:
         )
         self.assets.grid(row=0, column=0, padx=0, pady=0, sticky="nsew")
         
-        # Load analysis dashboard content
-        self.analysis = AnalysisDashboard(
-            self.tab_analysis,
-            self.current_user,
-            self.db,
-            self.api
-        )
-        self.analysis.grid(row=0, column=0, padx=0, pady=0, sticky="nsew")
+        # Create placeholder frames for Analysis and Settings that will be loaded on demand
+        self.analysis_frame = ctk.CTkFrame(self.tab_analysis)
+        self.analysis_frame.grid(row=0, column=0, padx=0, pady=0, sticky="nsew")
         
-        # Load settings content
-        self.settings_page = SettingsPage(
-            self.tab_settings,
-            self.current_user,
-            self.db,
-            self
+        # Add loading message for Analysis
+        analysis_loading_label = ctk.CTkLabel(
+            self.analysis_frame,
+            text="Analysis Dashboard",
+            font=ctk.CTkFont(size=24, weight="bold")
         )
-        self.settings_page.grid(row=0, column=0, padx=0, pady=0, sticky="nsew")
+        analysis_loading_label.pack(pady=(100, 10))
+        
+        analysis_loading_message = ctk.CTkLabel(
+            self.analysis_frame,
+            text="Loading analysis content...",
+            font=ctk.CTkFont(size=14)
+        )
+        analysis_loading_message.pack(pady=10)
+        
+        self.settings_frame = ctk.CTkFrame(self.tab_settings)
+        self.settings_frame.grid(row=0, column=0, padx=0, pady=0, sticky="nsew")
+        
+        # Add loading message for Settings
+        settings_loading_label = ctk.CTkLabel(
+            self.settings_frame,
+            text="Settings",
+            font=ctk.CTkFont(size=24, weight="bold")
+        )
+        settings_loading_label.pack(pady=(100, 10))
+        
+        settings_loading_message = ctk.CTkLabel(
+            self.settings_frame,
+            text="Loading settings content...",
+            font=ctk.CTkFont(size=14)
+        )
+        settings_loading_message.pack(pady=10)
+        
+        # Set up tab change event to load content when tabs are selected
+        self.tabview.configure(command=self.on_tab_change)
         
         # Set current frame for future destruction
         self.current_frame = self.main_frame
+        
+        # Default to Dashboard tab
+        self.tabview.set("Dashboard")
+        
+        # Check for tab content loading after a short delay to allow UI to initialize
+        self.root.after(500, self.check_initial_tab)
+        
+    def on_tab_change(self):
+        """Handle tab change events to load content dynamically."""
+        current_tab = self.tabview.get()
+        
+        # Load Analysis content when Analysis tab is selected
+        if current_tab == "Analysis" and not self.analysis_loaded:
+            print("Loading Analysis Dashboard due to tab selection...")
+            self.root.after(100, self.load_analysis_page)  # Short delay for UI to update
+            self.analysis_loaded = True
+            
+        # Load Settings content when Settings tab is selected
+        elif current_tab == "Settings" and not self.settings_loaded:
+            print("Loading Settings Page due to tab selection...")
+            self.root.after(100, self.load_settings_page)  # Short delay for UI to update
+            self.settings_loaded = True
         
     def create_header(self):
         """Create application header with navigation and user info."""
@@ -180,6 +232,50 @@ class CryptoJandieApp:
             height=30
         )
         self.logout_button.grid(row=0, column=2, padx=20, pady=0, sticky="e")
+        
+    def load_analysis_page(self):
+        """Load the analysis dashboard page."""
+        try:
+            # Remove the placeholder
+            self.analysis_frame.destroy()
+            
+            # Create the actual Analysis Dashboard
+            self.analysis = AnalysisDashboard(
+                self.tab_analysis,
+                self.current_user,
+                self.db,
+                self.api
+            )
+            self.analysis.grid(row=0, column=0, padx=0, pady=0, sticky="nsew")
+            print("Analysis Dashboard loaded successfully")
+        except Exception as e:
+            print(f"Error loading Analysis Dashboard: {str(e)}")
+            # Show error message to user
+            messagebox.showerror("Error", f"Could not load Analysis Dashboard: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            
+    def load_settings_page(self):
+        """Load the settings page."""
+        try:
+            # Remove the placeholder
+            self.settings_frame.destroy()
+            
+            # Create the actual Settings Page
+            self.settings_page = SettingsPage(
+                self.tab_settings,
+                self.current_user,
+                self.db,
+                self
+            )
+            self.settings_page.grid(row=0, column=0, padx=0, pady=0, sticky="nsew")
+            print("Settings Page loaded successfully")
+        except Exception as e:
+            print(f"Error loading Settings Page: {str(e)}")
+            # Show error message to user
+            messagebox.showerror("Error", f"Could not load Settings Page: {str(e)}")
+            import traceback
+            traceback.print_exc()
         
     def logout(self):
         """Handle user logout."""
@@ -237,6 +333,19 @@ class CryptoJandieApp:
                     updated_count += 1
                     
         print(f"Updated prices for {updated_count} assets")
+
+    def check_initial_tab(self):
+        """Check if initial tab content is loaded and load if not."""
+        current_tab = self.tabview.get()
+        
+        if current_tab == "Analysis" and not self.analysis_loaded:
+            print("Loading Analysis Dashboard due to initial tab check...")
+            self.root.after(100, self.load_analysis_page)
+            self.analysis_loaded = True
+        elif current_tab == "Settings" and not self.settings_loaded:
+            print("Loading Settings Page due to initial tab check...")
+            self.root.after(100, self.load_settings_page)
+            self.settings_loaded = True
 
 if __name__ == "__main__":
     root = ctk.CTk()

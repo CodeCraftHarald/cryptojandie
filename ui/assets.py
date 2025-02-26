@@ -5,7 +5,7 @@ from datetime import datetime
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
-from utils import format_currency, format_percentage, calculate_weighted_average, parse_csv_data
+from utils import format_currency, format_percentage, calculate_weighted_average, parse_csv_data, convert_comma_to_period, parse_numeric_input
 
 class AssetManagement(ctk.CTkFrame):
     def __init__(self, master, user, db, api, refresh_callback):
@@ -421,7 +421,7 @@ class AssetManagement(ctk.CTkFrame):
                     format_currency(transaction['price_per_unit']),
                     format_currency(transaction['amount'] * transaction['price_per_unit']),
                     transaction['notes'] or "",
-                    "Delete"
+                    "Edit | Delete"
                 ),
                 tags=(transaction_id,)
             )
@@ -502,6 +502,8 @@ class AssetManagement(ctk.CTkFrame):
             placeholder_text="Enter the amount of cryptocurrency"
         )
         amount_entry.grid(row=1, column=0, padx=20, pady=(5, 10), sticky="ew")
+        # Bind comma-to-period conversion for German keyboard users
+        amount_entry.bind("<Key>", convert_comma_to_period)
         
         # Purchase price entry
         price_frame = ctk.CTkFrame(dialog)
@@ -520,6 +522,8 @@ class AssetManagement(ctk.CTkFrame):
             placeholder_text="Enter the purchase price per unit in USD"
         )
         price_entry.grid(row=1, column=0, padx=20, pady=(5, 10), sticky="ew")
+        # Bind comma-to-period conversion for German keyboard users
+        price_entry.bind("<Key>", convert_comma_to_period)
         
         # Notes entry
         notes_frame = ctk.CTkFrame(dialog)
@@ -722,7 +726,8 @@ class AssetManagement(ctk.CTkFrame):
             
         # Validate amount and price
         try:
-            amount = float(amount_str)
+            # Use parse_numeric_input to handle comma decimal separators
+            amount = float(parse_numeric_input(amount_str))
             if amount <= 0:
                 raise ValueError("Amount must be positive")
         except ValueError:
@@ -730,7 +735,8 @@ class AssetManagement(ctk.CTkFrame):
             return
             
         try:
-            price = float(price_str)
+            # Use parse_numeric_input to handle comma decimal separators
+            price = float(parse_numeric_input(price_str))
             if price < 0:
                 raise ValueError("Price cannot be negative")
         except ValueError:
@@ -856,6 +862,8 @@ class AssetManagement(ctk.CTkFrame):
             placeholder_text=f"Enter the new total amount of {holding['symbol']}"
         )
         update_amount_entry.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="ew")
+        # Bind comma-to-period conversion for German keyboard users
+        update_amount_entry.bind("<Key>", convert_comma_to_period)
         
         # Notes entry
         update_notes_frame = ctk.CTkFrame(tab_update)
@@ -907,6 +915,8 @@ class AssetManagement(ctk.CTkFrame):
             placeholder_text=f"Enter the additional amount of {holding['symbol']} to purchase"
         )
         add_amount_entry.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="ew")
+        # Bind comma-to-period conversion for German keyboard users
+        add_amount_entry.bind("<Key>", convert_comma_to_period)
         
         # Price entry
         add_price_frame = ctk.CTkFrame(tab_add)
@@ -925,6 +935,8 @@ class AssetManagement(ctk.CTkFrame):
             placeholder_text="Enter the purchase price per unit in USD"
         )
         add_price_entry.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="ew")
+        # Bind comma-to-period conversion for German keyboard users
+        add_price_entry.bind("<Key>", convert_comma_to_period)
         
         # Notes entry
         add_notes_frame = ctk.CTkFrame(tab_add)
@@ -966,17 +978,38 @@ class AssetManagement(ctk.CTkFrame):
         
         stake_amount_label = ctk.CTkLabel(
             stake_amount_frame,
-            text="Staking Reward Amount:",
+            text="New Total Amount (including staking rewards):",
             font=ctk.CTkFont(size=14)
         )
         stake_amount_label.grid(row=0, column=0, padx=20, pady=(10, 5), sticky="w")
         
+        # Display current amount for reference
+        current_amount_info = ctk.CTkLabel(
+            stake_amount_frame,
+            text=f"Current amount: {holding['amount']:.8f} {holding['symbol']}",
+            font=ctk.CTkFont(size=12),
+            text_color="gray"
+        )
+        current_amount_info.grid(row=1, column=0, padx=20, pady=(0, 5), sticky="w")
+        
+        # Helpful information text
+        info_text = ctk.CTkLabel(
+            stake_amount_frame,
+            text="Enter the new total amount after adding staking rewards. The system will calculate the difference as staking income.",
+            font=ctk.CTkFont(size=12),
+            text_color="gray",
+            wraplength=380
+        )
+        info_text.grid(row=2, column=0, padx=20, pady=(0, 5), sticky="w")
+        
         stake_amount_entry = ctk.CTkEntry(
             stake_amount_frame,
             width=400,
-            placeholder_text=f"Enter the staking reward amount of {holding['symbol']}"
+            placeholder_text=f"Enter the new total amount including staking rewards"
         )
-        stake_amount_entry.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="ew")
+        stake_amount_entry.grid(row=3, column=0, padx=20, pady=(5, 10), sticky="ew")
+        # Bind comma-to-period conversion for German keyboard users
+        stake_amount_entry.bind("<Key>", convert_comma_to_period)
         
         # Notes entry
         stake_notes_frame = ctk.CTkFrame(tab_staking)
@@ -1008,7 +1041,7 @@ class AssetManagement(ctk.CTkFrame):
             ),
             width=400
         )
-        stake_button.grid(row=2, column=0, padx=20, pady=(20, 20), sticky="ew")
+        stake_button.grid(row=4, column=0, padx=20, pady=(20, 20), sticky="ew")
         
         # Cancel button (bottom of dialog)
         cancel_button = ctk.CTkButton(
@@ -1018,12 +1051,13 @@ class AssetManagement(ctk.CTkFrame):
             fg_color="gray",
             width=400
         )
-        cancel_button.grid(row=3, column=0, padx=20, pady=(20, 20), sticky="ew")
+        cancel_button.grid(row=5, column=0, padx=20, pady=(20, 20), sticky="ew")
         
     def update_holding_total(self, dialog, holding, new_amount_str, notes):
         """Update the total amount of a holding."""
         try:
-            new_amount = float(new_amount_str)
+            # Use parse_numeric_input to handle comma decimal separators
+            new_amount = float(parse_numeric_input(new_amount_str))
             if new_amount < 0:
                 raise ValueError("Amount cannot be negative")
         except ValueError:
@@ -1066,7 +1100,8 @@ class AssetManagement(ctk.CTkFrame):
     def add_new_purchase(self, dialog, holding, amount_str, price_str, notes):
         """Add a new purchase to an existing holding."""
         try:
-            amount = float(amount_str)
+            # Use parse_numeric_input to handle comma decimal separators
+            amount = float(parse_numeric_input(amount_str))
             if amount <= 0:
                 raise ValueError("Amount must be positive")
         except ValueError:
@@ -1074,7 +1109,8 @@ class AssetManagement(ctk.CTkFrame):
             return
             
         try:
-            price = float(price_str)
+            # Use parse_numeric_input to handle comma decimal separators
+            price = float(parse_numeric_input(price_str))
             if price < 0:
                 raise ValueError("Price cannot be negative")
         except ValueError:
@@ -1126,47 +1162,50 @@ class AssetManagement(ctk.CTkFrame):
     def add_staking_income(self, dialog, holding, amount_str, notes):
         """Add staking income to an existing holding."""
         try:
-            amount = float(amount_str)
-            if amount <= 0:
-                raise ValueError("Amount must be positive")
+            # Use parse_numeric_input to handle comma decimal separators
+            new_total = float(parse_numeric_input(amount_str))
+            
+            # Ensure the new total is greater than the current amount
+            if new_total <= holding['amount']:
+                messagebox.showerror("Error", "New total amount must be greater than the current amount.", parent=dialog)
+                return
+                
+            # Calculate staking income as the difference
+            staking_amount = new_total - holding['amount']
+            
+            # Update holding with new total
+            self.db.update_holding(
+                self.user['id'],
+                holding['id'],
+                new_total,
+                notes=notes.strip() if notes else None
+            )
+            
+            # Record transaction
+            staking_notes = f"Staking income: {notes.strip()}" if notes else "Staking income"
+            self.db.add_transaction(
+                self.user['id'],
+                holding['asset_id'],
+                "STAKING",
+                staking_amount,
+                self.current_prices.get(holding['asset_id'], 0.0),  # Use current market price
+                staking_notes
+            )
+                
+            messagebox.showinfo(
+                "Success", 
+                f"Added {staking_amount:.8f} {holding['symbol']} from staking. New total: {new_total:.8f}", 
+                parent=dialog
+            )
+            dialog.destroy()
+            
+            # Refresh data
+            self.load_assets_data()
+            if self.refresh_callback:
+                self.refresh_callback()
         except ValueError:
             messagebox.showerror("Error", "Please enter a valid amount.", parent=dialog)
             return
-            
-        # Calculate new total amount
-        new_total_amount = holding['amount'] + amount
-        
-        # For staking income, we keep the same purchase price
-        # Update holding
-        self.db.update_holding(
-            self.user['id'],
-            holding['id'],
-            new_total_amount,
-            notes=notes.strip() if notes else None
-        )
-        
-        # Record transaction
-        staking_notes = f"Staking income: {notes.strip()}" if notes else "Staking income"
-        self.db.add_transaction(
-            self.user['id'],
-            holding['asset_id'],
-            "STAKING",
-            amount,
-            0.0,  # Staking has no purchase price
-            staking_notes
-        )
-            
-        messagebox.showinfo(
-            "Success", 
-            f"Added {amount} {holding['symbol']} from staking. New total: {new_total_amount}.", 
-            parent=dialog
-        )
-        dialog.destroy()
-        
-        # Refresh data
-        self.load_assets_data()
-        if self.refresh_callback:
-            self.refresh_callback()
             
     def show_delete_confirmation(self, holding_id):
         """Show confirmation dialog before deleting a holding."""
@@ -1252,8 +1291,154 @@ class AssetManagement(ctk.CTkFrame):
         
         # Create the context menu
         menu = tk.Menu(self, tearoff=0)
+        menu.add_command(label="Edit Transaction", command=lambda: self.show_edit_transaction_dialog(row_id))
         menu.add_command(label="Delete Transaction", command=lambda: self.delete_transaction(row_id))
         menu.post(event.x_root, event.y_root)
+        
+    def show_edit_transaction_dialog(self, row_id):
+        """Show dialog to edit a transaction."""
+        try:
+            # Get the transaction ID from the row tags
+            tags = self.transaction_tree.item(row_id, "tags")
+            if not tags:
+                messagebox.showerror("Error", "Could not identify transaction to edit.")
+                return
+            
+            transaction_id = tags[0]
+            
+            # Get transaction details
+            transaction_values = self.transaction_tree.item(row_id, "values")
+            
+            dialog = ctk.CTkToplevel(self)
+            dialog.title("Edit Transaction")
+            dialog.geometry("500x350")  # Make it tall enough for the confirmation button
+            dialog.transient(self)
+            dialog.resizable(True, True)  # Make the dialog resizable
+            
+            # Configure dialog layout
+            dialog.grid_columnconfigure(0, weight=1)
+            dialog.grid_rowconfigure(3, weight=1)  # Make notes area expandable
+            
+            # Dialog title
+            title_label = ctk.CTkLabel(
+                dialog,
+                text="Edit Transaction",
+                font=ctk.CTkFont(size=18, weight="bold")
+            )
+            title_label.grid(row=0, column=0, padx=20, pady=(20, 10), sticky="ew")
+            
+            # Transaction info
+            info_frame = ctk.CTkFrame(dialog)
+            info_frame.grid(row=1, column=0, padx=20, pady=(10, 0), sticky="ew")
+            info_frame.grid_columnconfigure(1, weight=1)
+            
+            date_label = ctk.CTkLabel(info_frame, text="Date:", font=ctk.CTkFont(size=14))
+            date_label.grid(row=0, column=0, padx=(20, 10), pady=(10, 5), sticky="w")
+            date_value = ctk.CTkLabel(info_frame, text=transaction_values[0], font=ctk.CTkFont(size=14))
+            date_value.grid(row=0, column=1, padx=(0, 20), pady=(10, 5), sticky="w")
+            
+            type_label = ctk.CTkLabel(info_frame, text="Type:", font=ctk.CTkFont(size=14))
+            type_label.grid(row=1, column=0, padx=(20, 10), pady=5, sticky="w")
+            type_value = ctk.CTkLabel(info_frame, text=transaction_values[1], font=ctk.CTkFont(size=14))
+            type_value.grid(row=1, column=1, padx=(0, 20), pady=5, sticky="w")
+            
+            asset_label = ctk.CTkLabel(info_frame, text="Asset:", font=ctk.CTkFont(size=14))
+            asset_label.grid(row=2, column=0, padx=(20, 10), pady=5, sticky="w")
+            asset_value = ctk.CTkLabel(info_frame, text=transaction_values[2], font=ctk.CTkFont(size=14))
+            asset_value.grid(row=2, column=1, padx=(0, 20), pady=5, sticky="w")
+            
+            amount_label = ctk.CTkLabel(info_frame, text="Amount:", font=ctk.CTkFont(size=14))
+            amount_label.grid(row=3, column=0, padx=(20, 10), pady=5, sticky="w")
+            amount_value = ctk.CTkLabel(info_frame, text=transaction_values[3], font=ctk.CTkFont(size=14))
+            amount_value.grid(row=3, column=1, padx=(0, 20), pady=5, sticky="w")
+            
+            price_label = ctk.CTkLabel(info_frame, text="Price:", font=ctk.CTkFont(size=14))
+            price_label.grid(row=4, column=0, padx=(20, 10), pady=5, sticky="w")
+            price_value = ctk.CTkLabel(info_frame, text=transaction_values[4], font=ctk.CTkFont(size=14))
+            price_value.grid(row=4, column=1, padx=(0, 20), pady=5, sticky="w")
+            
+            total_label = ctk.CTkLabel(info_frame, text="Total Value:", font=ctk.CTkFont(size=14))
+            total_label.grid(row=5, column=0, padx=(20, 10), pady=(5, 10), sticky="w")
+            total_value = ctk.CTkLabel(info_frame, text=transaction_values[5], font=ctk.CTkFont(size=14))
+            total_value.grid(row=5, column=1, padx=(0, 20), pady=(5, 10), sticky="w")
+            
+            # Notes entry
+            notes_frame = ctk.CTkFrame(dialog)
+            notes_frame.grid(row=2, column=0, padx=20, pady=(10, 0), sticky="nsew")
+            notes_frame.grid_columnconfigure(0, weight=1)
+            notes_frame.grid_rowconfigure(1, weight=1)
+            
+            notes_label = ctk.CTkLabel(
+                notes_frame,
+                text="Notes:",
+                font=ctk.CTkFont(size=14)
+            )
+            notes_label.grid(row=0, column=0, padx=20, pady=(10, 5), sticky="w")
+            
+            notes_entry = ctk.CTkTextbox(
+                notes_frame,
+                width=460,
+                height=100
+            )
+            notes_entry.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="nsew")
+            
+            # Pre-fill with existing notes
+            if transaction_values[6]:
+                notes_entry.insert("0.0", transaction_values[6])
+            
+            # Buttons
+            button_frame = ctk.CTkFrame(dialog, fg_color="transparent")
+            button_frame.grid(row=3, column=0, padx=20, pady=(10, 20), sticky="ew")
+            
+            button_frame.grid_columnconfigure(0, weight=1)
+            button_frame.grid_columnconfigure(1, weight=1)
+            
+            cancel_button = ctk.CTkButton(
+                button_frame,
+                text="Cancel",
+                command=dialog.destroy,
+                fg_color="gray",
+                width=180
+            )
+            cancel_button.grid(row=0, column=0, padx=(20, 10), pady=0, sticky="e")
+            
+            save_button = ctk.CTkButton(
+                button_frame,
+                text="Save Changes",
+                command=lambda: self.update_transaction(
+                    dialog,
+                    transaction_id,
+                    notes_entry.get("0.0", "end")
+                ),
+                width=180
+            )
+            save_button.grid(row=0, column=1, padx=(10, 20), pady=0, sticky="w")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"An error occurred while opening edit dialog: {str(e)}")
+    
+    def update_transaction(self, dialog, transaction_id, notes):
+        """Update a transaction in the database."""
+        try:
+            # Update the transaction
+            success = self.db.update_transaction(
+                transaction_id,
+                self.user['id'],
+                notes.strip() if notes else None
+            )
+            
+            if success:
+                messagebox.showinfo("Success", "Transaction updated successfully.", parent=dialog)
+                dialog.destroy()
+                # Refresh data
+                self.load_assets_data()
+                # Notify parent to refresh other components
+                if self.refresh_callback:
+                    self.refresh_callback()
+            else:
+                messagebox.showerror("Error", "Failed to update transaction. Please try again.", parent=dialog)
+        except Exception as e:
+            messagebox.showerror("Error", f"An error occurred while updating transaction: {str(e)}", parent=dialog)
         
     def delete_transaction(self, row_id):
         """Delete a transaction from the database."""
@@ -1295,10 +1480,14 @@ class AssetManagement(ctk.CTkFrame):
         col = self.transaction_tree.identify_column(event.x)
         col_idx = int(col[1:]) - 1
         
-        # Check if actions column
-        if col_idx == 7:  # Actions column
+        # Check which column was clicked
+        if col_idx == 7:  # Actions column (Delete)
             self.delete_transaction(row_id)
-        # Currently transaction update is not implemented
+        elif col_idx == 6:  # Notes column
+            self.show_edit_transaction_dialog(row_id)
+        else:
+            # For any other column, show edit dialog
+            self.show_edit_transaction_dialog(row_id)
             
     def import_csv(self):
         """Import holdings from a CSV file."""

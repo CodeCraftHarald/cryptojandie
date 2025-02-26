@@ -370,3 +370,16 @@ class Database:
         except Exception as e:
             print(f"Error deleting transaction: {str(e)}")
             return False 
+            
+    def update_transaction(self, transaction_id, user_id, notes=None):
+        """Update a transaction's details by ID and user ID for security."""
+        try:
+            self.cursor.execute(
+                "UPDATE transactions SET notes = ? WHERE id = ? AND user_id = ?",
+                (notes, transaction_id, user_id)
+            )
+            self.connection.commit()
+            return self.cursor.rowcount > 0  # Returns True if a row was updated
+        except Exception as e:
+            print(f"Error updating transaction: {str(e)}")
+            return False 
