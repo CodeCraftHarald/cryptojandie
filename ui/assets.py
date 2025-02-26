@@ -1034,9 +1034,11 @@ class AssetManagement(ctk.CTkFrame):
         amount_diff = new_amount - holding['amount']
         
         # Update holding
-        self.db.update_holding(
-            holding['id'],
+        success = self.db.update_holding(
+            self.user['id'],  # Make sure user_id is first
+            holding['id'],    # holding_id second
             new_amount,
+            holding['purchase_price_per_unit'],
             notes=notes.strip() if notes else None
         )
         
@@ -1092,10 +1094,11 @@ class AssetManagement(ctk.CTkFrame):
         
         # Update holding
         self.db.update_holding(
+            self.user['id'],
             holding['id'],
             new_total_amount,
             new_avg_price,
-            notes.strip() if notes else None
+            notes=notes.strip() if notes else None
         )
         
         # Record transaction
@@ -1136,6 +1139,7 @@ class AssetManagement(ctk.CTkFrame):
         # For staking income, we keep the same purchase price
         # Update holding
         self.db.update_holding(
+            self.user['id'],
             holding['id'],
             new_total_amount,
             notes=notes.strip() if notes else None
@@ -1197,15 +1201,18 @@ class AssetManagement(ctk.CTkFrame):
             )
             
             # Delete holding
-            self.db.delete_holding(holding_id)
+            success = self.db.delete_holding(self.user['id'], holding_id)
             
-            messagebox.showinfo("Success", f"Deleted {holding['symbol']} holding.")
-            
-            # Refresh data
-            self.load_assets_data()
-            if self.refresh_callback:
-                self.refresh_callback()
+            if success:
+                messagebox.showinfo("Success", f"Deleted {holding['symbol']} holding.")
                 
+                # Refresh data
+                self.load_assets_data()
+                if self.refresh_callback:
+                    self.refresh_callback()
+            else:
+                messagebox.showerror("Error", f"Failed to delete {holding['symbol']} holding. Please check the logs for details.")
+        
     def on_holding_double_click(self, event):
         """Handle double-click on a holding row."""
         row_id = self.holdings_tree.identify_row(event.y)

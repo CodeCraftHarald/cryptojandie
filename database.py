@@ -116,7 +116,7 @@ class Database:
             ("XRP", "XRP", "ripple"),
             ("SUI", "Sui", "sui"),
             ("LINK", "Chainlink", "chainlink"),
-            ("BERA", "Bera", "bera"),
+            ("BERA", "Berachain", "berachain-bera"),
             ("DOGE", "Dogecoin", "dogecoin"),
             ("ADA", "Cardano", "cardano"),
             ("TRX", "TRON", "tron"),
@@ -125,8 +125,8 @@ class Database:
             ("OSMO", "Osmosis", "osmosis"),
             ("BAND", "Band Protocol", "band-protocol"),
             ("DOT", "Polkadot", "polkadot"),
-            ("POL", "Polkadex", "polkadex"),
-            ("S", "Shardeum", "shardeum"),
+            ("POL", "Pol ex-MATIC", "polygon-ecosystem-token"),
+            ("S", "Sonic prev FTM", "sonic-3"),
             ("LAYER", "Layer", "layer"),
             ("SOLV", "Solv Protocol", "solv-protocol"),
             ("APT", "Aptos", "aptos"),
@@ -156,7 +156,7 @@ class Database:
             ("BTTC", "BitTorrent-Chain", "bittorrent-chain"),
             ("CYBER", "CyberConnect", "cyberconnect"),
             ("NEXO", "NEXO", "nexo"),
-            ("SPACE", "Space ID", "space-id"),
+            ("SPACE", "Space Token", "space-token-bsc"),
             ("IRIS", "IRISnet", "iris-network")
         ]
         
@@ -243,6 +243,37 @@ class Database:
             # Asset symbol already exists
             return None
             
+    def update_asset_coingecko_id(self, symbol, new_coingecko_id):
+        """Update the CoinGecko ID for an existing asset."""
+        try:
+            self.cursor.execute(
+                "UPDATE assets SET coingecko_id = ? WHERE symbol = ?",
+                (new_coingecko_id, symbol)
+            )
+            rows_affected = self.cursor.rowcount
+            self.connection.commit()
+            print(f"Updated CoinGecko ID for {symbol} to {new_coingecko_id}, rows affected: {rows_affected}")
+            return rows_affected > 0
+        except Exception as e:
+            print(f"Error updating CoinGecko ID for {symbol}: {str(e)}")
+            return False
+            
+    def fix_bera_asset(self):
+        """Fix the Bera asset by updating its CoinGecko ID."""
+        return self.update_asset_coingecko_id("BERA", "bera")
+    
+    def fix_s_asset(self):
+        """Fix the S (Sonic) asset by updating its CoinGecko ID."""
+        return self.update_asset_coingecko_id("S", "fantom")
+        
+    def fix_pol_asset(self):
+        """Fix the POL (Polygon) asset by updating its CoinGecko ID."""
+        return self.update_asset_coingecko_id("POL", "polygon")
+        
+    def fix_space_asset(self):
+        """Fix the SPACE asset by updating its CoinGecko ID."""
+        return self.update_asset_coingecko_id("SPACE", "space")
+    
     def update_asset_market_cap(self, asset_id, market_cap):
         """Update market cap for an asset."""
         self.cursor.execute(
@@ -270,11 +301,31 @@ class Database:
         
     def delete_holding(self, user_id, holding_id):
         """Delete a holding."""
-        self.cursor.execute(
-            "DELETE FROM holdings WHERE id = ? AND user_id = ?",
-            (holding_id, user_id)
-        )
-        self.connection.commit()
+        try:
+            # First, check if the holding exists for this user
+            self.cursor.execute(
+                "SELECT COUNT(*) FROM holdings WHERE id = ? AND user_id = ?",
+                (holding_id, user_id)
+            )
+            count = self.cursor.fetchone()[0]
+            
+            if count == 0:
+                print(f"Warning: No holding found with ID {holding_id} for user {user_id}")
+                return False
+                
+            # Delete the holding
+            self.cursor.execute(
+                "DELETE FROM holdings WHERE id = ? AND user_id = ?",
+                (holding_id, user_id)
+            )
+            rows_affected = self.cursor.rowcount
+            self.connection.commit()
+            
+            print(f"Deleted holding {holding_id} for user {user_id}, rows affected: {rows_affected}")
+            return rows_affected > 0
+        except Exception as e:
+            print(f"Error deleting holding: {str(e)}")
+            return False
         
     def get_user_holdings(self, user_id):
         """Get all holdings for a user with asset information."""
