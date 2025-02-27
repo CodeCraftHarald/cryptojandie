@@ -14,6 +14,7 @@ from ui.login import LoginScreen
 from ui.dashboard import PortfolioDashboard
 from ui.assets import AssetManagement
 from ui.analysis import AnalysisDashboard
+from ui.staking import StakingDashboard
 from ui.settings import SettingsPage
 
 # Set appearance mode and default color theme
@@ -95,14 +96,16 @@ class CryptoJandieApp:
         self.tab_dashboard = self.tabview.add("Dashboard")
         self.tab_assets = self.tabview.add("Assets")
         self.tab_analysis = self.tabview.add("Analysis")
+        self.tab_staking = self.tabview.add("Staking")
         self.tab_settings = self.tabview.add("Settings")
         
         # Track loaded states
         self.analysis_loaded = False
+        self.staking_loaded = False
         self.settings_loaded = False
         
         # Configure tabs
-        for tab in [self.tab_dashboard, self.tab_assets, self.tab_analysis, self.tab_settings]:
+        for tab in [self.tab_dashboard, self.tab_assets, self.tab_analysis, self.tab_staking, self.tab_settings]:
             tab.grid_rowconfigure(0, weight=1)
             tab.grid_columnconfigure(0, weight=1)
         
@@ -146,6 +149,25 @@ class CryptoJandieApp:
             font=ctk.CTkFont(size=14)
         )
         analysis_loading_message.pack(pady=10)
+
+        # Create placeholder frame for Staking that will be loaded on demand
+        self.staking_frame = ctk.CTkFrame(self.tab_staking)
+        self.staking_frame.grid(row=0, column=0, padx=0, pady=0, sticky="nsew")
+        
+        # Add loading message for Staking
+        staking_loading_label = ctk.CTkLabel(
+            self.staking_frame,
+            text="Staking Dashboard",
+            font=ctk.CTkFont(size=24, weight="bold")
+        )
+        staking_loading_label.pack(pady=(100, 10))
+        
+        staking_loading_message = ctk.CTkLabel(
+            self.staking_frame,
+            text="Loading staking content...",
+            font=ctk.CTkFont(size=14)
+        )
+        staking_loading_message.pack(pady=10)
         
         self.settings_frame = ctk.CTkFrame(self.tab_settings)
         self.settings_frame.grid(row=0, column=0, padx=0, pady=0, sticky="nsew")
@@ -186,6 +208,12 @@ class CryptoJandieApp:
             print("Loading Analysis Dashboard due to tab selection...")
             self.root.after(100, self.load_analysis_page)  # Short delay for UI to update
             self.analysis_loaded = True
+            
+        # Load Staking content when Staking tab is selected
+        elif current_tab == "Staking" and not self.staking_loaded:
+            print("Loading Staking Dashboard due to tab selection...")
+            self.root.after(100, self.load_staking_page)  # Short delay for UI to update
+            self.staking_loaded = True
             
         # Load Settings content when Settings tab is selected
         elif current_tab == "Settings" and not self.settings_loaded:
@@ -255,6 +283,28 @@ class CryptoJandieApp:
             import traceback
             traceback.print_exc()
             
+    def load_staking_page(self):
+        """Load the staking dashboard page."""
+        try:
+            # Remove the placeholder
+            self.staking_frame.destroy()
+            
+            # Create the actual Staking Dashboard
+            self.staking = StakingDashboard(
+                self.tab_staking,
+                self.current_user,
+                self.db,
+                self.api
+            )
+            self.staking.grid(row=0, column=0, padx=0, pady=0, sticky="nsew")
+            print("Staking Dashboard loaded successfully")
+        except Exception as e:
+            print(f"Error loading Staking Dashboard: {str(e)}")
+            # Show error message to user
+            messagebox.showerror("Error", f"Could not load Staking Dashboard: {str(e)}")
+            import traceback
+            traceback.print_exc()
+        
     def load_settings_page(self):
         """Load the settings page."""
         try:
@@ -342,6 +392,10 @@ class CryptoJandieApp:
             print("Loading Analysis Dashboard due to initial tab check...")
             self.root.after(100, self.load_analysis_page)
             self.analysis_loaded = True
+        elif current_tab == "Staking" and not self.staking_loaded:
+            print("Loading Staking Dashboard due to initial tab check...")
+            self.root.after(100, self.load_staking_page)
+            self.staking_loaded = True
         elif current_tab == "Settings" and not self.settings_loaded:
             print("Loading Settings Page due to initial tab check...")
             self.root.after(100, self.load_settings_page)
