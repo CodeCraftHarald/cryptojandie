@@ -7,6 +7,7 @@ import matplotlib
 matplotlib.use("TkAgg")
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import matplotlib.pyplot as plt
 
 from utils import format_currency, format_percentage, embed_chart
 
@@ -192,10 +193,15 @@ class StakingDashboard(ctk.CTkFrame):
                         foreground="white",
                         relief="flat")
         
-        # Create the treeview
+        # Add alternating row colors
+        style.map('Treeview', 
+                  background=[('selected', '#3498db'), 
+                              ('alternate', '#333333')])
+        
+        # Create the treeview with additional column for confidence level
         self.staking_tree = tk.ttk.Treeview(
             self.staking_tree_container,
-            columns=("asset", "total_rewards", "last_reward", "avg_monthly", "estimated_apy"),
+            columns=("asset", "total_rewards", "last_reward", "avg_monthly", "estimated_apy", "confidence"),
             show="headings",
             height=10
         )
@@ -206,13 +212,15 @@ class StakingDashboard(ctk.CTkFrame):
         self.staking_tree.heading("last_reward", text="Last Reward")
         self.staking_tree.heading("avg_monthly", text="Monthly Average")
         self.staking_tree.heading("estimated_apy", text="Est. APY")
+        self.staking_tree.heading("confidence", text="Confidence")
         
         # Column widths
         self.staking_tree.column("asset", width=150, anchor="w")
         self.staking_tree.column("total_rewards", width=120, anchor="e")
         self.staking_tree.column("last_reward", width=120, anchor="e")
         self.staking_tree.column("avg_monthly", width=120, anchor="e")
-        self.staking_tree.column("estimated_apy", width=120, anchor="e")
+        self.staking_tree.column("estimated_apy", width=100, anchor="e")
+        self.staking_tree.column("confidence", width=90, anchor="center")
         
         # Create scrollbar
         staking_scrollbar = tk.Scrollbar(self.staking_tree_container, orient="vertical", command=self.staking_tree.yview)
@@ -336,20 +344,69 @@ class StakingDashboard(ctk.CTkFrame):
             if holding:
                 # Calculate APY based on current holdings and staking rewards
                 total_staked_amount = holding['amount']
+                
+                # Calculate average monthly staking using improved method
                 monthly_staking_amount = self.calculate_monthly_average_staking(data['transactions'])
                 
+                # Calculate APY only if we have staking and holdings data
                 if total_staked_amount > 0 and monthly_staking_amount > 0:
-                    # Calculate annual yield: (Monthly rewards * 12) / Total staked amount
-                    monthly_staking_value = monthly_staking_amount * self.current_prices.get(asset_id, 0)
-                    annual_staking_value = monthly_staking_value * 12
-                    total_staked_value = total_staked_amount * self.current_prices.get(asset_id, 0)
-                    estimated_apy = (annual_staking_value / total_staked_value) * 100 if total_staked_value > 0 else 0
+                    # Get staking period information
+                    earliest_timestamp = min(datetime.fromisoformat(tx['timestamp']) for tx in data['transactions'])
+                    latest_timestamp = max(datetime.fromisoformat(tx['timestamp']) for tx in data['transactions'])
                     
+                    # Check if we have at least a month of staking data for more accurate APY
+                    days_staking = (latest_timestamp - earliest_timestamp).days
+                    
+                    if days_staking >= 30:  # At least a month of data
+                        # Calculate annual yield more accurately based on actual period
+                        monthly_staking_value = monthly_staking_amount * self.current_prices.get(asset_id, 0)
+                        annual_staking_value = monthly_staking_value * 12
+                        total_staked_value = total_staked_amount * self.current_prices.get(asset_id, 0)
+                        
+                        # Handle case where staked value is very small to prevent huge APY values
+                        if total_staked_value > 0 and total_staked_value >= (monthly_staking_value / 10):
+                            estimated_apy = (annual_staking_value / total_staked_value) * 100
+                            
+                            # Cap unreasonable APY values (optional)
+                            if estimated_apy > 1000:  # Cap at 1000% (10x) APY
+                                estimated_apy = 1000
+                        else:
+                            # Set a conservative default if staked value is too small
+                            estimated_apy = 0
+                    else:
+                        # For short staking periods, use a more conservative estimate
+                        # Annualize based on the days we have data
+                        if days_staking > 0:
+                            total_staking_value = data['total_value']
+                            annualization_factor = 365.0 / days_staking
+                            annual_staking_value = total_staking_value * annualization_factor
+                            total_staked_value = total_staked_amount * self.current_prices.get(asset_id, 0)
+                            
+                            if total_staked_value > 0:
+                                estimated_apy = (annual_staking_value / total_staked_value) * 100
+                                # Cap unreasonable values from short periods
+                                if estimated_apy > 500:
+                                    estimated_apy = 500
+                            else:
+                                estimated_apy = 0
+                        else:
+                            estimated_apy = 0
+                        
                     staking_by_asset[asset_id]['apy'] = estimated_apy
+                    
+                    # Also store the confidence level in the APY calculation
+                    if days_staking >= 180:  # 6+ months
+                        staking_by_asset[asset_id]['apy_confidence'] = "high"
+                    elif days_staking >= 60:  # 2+ months
+                        staking_by_asset[asset_id]['apy_confidence'] = "medium"
+                    else:
+                        staking_by_asset[asset_id]['apy_confidence'] = "low"
                 else:
                     staking_by_asset[asset_id]['apy'] = 0
+                    staking_by_asset[asset_id]['apy_confidence'] = "none"
             else:
                 staking_by_asset[asset_id]['apy'] = 0
+                staking_by_asset[asset_id]['apy_confidence'] = "none"
         
         # Store staking data
         self.staking_data = {
@@ -373,19 +430,64 @@ class StakingDashboard(ctk.CTkFrame):
             
         # Group transactions by month
         by_month = {}
+        
+        # Find earliest and latest transaction dates for time range calculation
+        earliest_date = None
+        latest_date = None
+        
         for tx in transactions:
             timestamp = datetime.fromisoformat(tx['timestamp'])
             month_key = timestamp.strftime("%Y-%m")
             
+            # Track earliest and latest dates
+            if earliest_date is None or timestamp < earliest_date:
+                earliest_date = timestamp
+            if latest_date is None or timestamp > latest_date:
+                latest_date = timestamp
+            
             if month_key not in by_month:
                 by_month[month_key] = 0
-                
+            
             by_month[month_key] += tx['amount']
         
         # Calculate average
         total_amount = sum(by_month.values())
+        
+        # Calculate the number of months in the date range
+        if earliest_date and latest_date:
+            # Calculate months between earliest and latest transaction
+            month_diff = (latest_date.year - earliest_date.year) * 12 + (latest_date.month - earliest_date.month)
+            # Include partial months by adding 1
+            months_in_range = month_diff + 1
+            
+            # Check if we're missing months in the range (months without staking)
+            current_year_month = earliest_date.strftime("%Y-%m")
+            end_year_month = latest_date.strftime("%Y-%m")
+            
+            expected_months = []
+            while current_year_month <= end_year_month:
+                expected_months.append(current_year_month)
+                # Move to next month
+                year = int(current_year_month.split('-')[0])
+                month = int(current_year_month.split('-')[1])
+                if month == 12:
+                    year += 1
+                    month = 1
+                else:
+                    month += 1
+                current_year_month = f"{year:04d}-{month:02d}"
+            
+            # Include months with no staking in the calculation
+            for month in expected_months:
+                if month not in by_month:
+                    by_month[month] = 0
+        else:
+            months_in_range = 1  # Default if can't determine date range
+        
+        # Use actual number of months from the date range, not just months with transactions
         num_months = len(by_month)
         
+        # Return the average (total divided by number of months)
         return total_amount / num_months if num_months > 0 else 0
         
     def show_no_staking_data_message(self):
@@ -497,23 +599,58 @@ class StakingDashboard(ctk.CTkFrame):
         # Format month labels
         month_labels = [datetime.strptime(m, "%Y-%m").strftime("%b %Y") for m in months]
         
-        # Create figure
+        # Create figure with a better style
+        plt.style.use('dark_background')
         fig = Figure(figsize=(width/100, height/100), dpi=100)
         ax = fig.add_subplot(111)
         
-        # Create line chart
-        ax.plot(month_labels, values, marker='o', linestyle='-', color='#3498db', linewidth=2)
+        # Create gradient-filled line chart
+        line = ax.plot(month_labels, values, marker='o', linestyle='-', color='#3498db', linewidth=2.5, markersize=6, markerfacecolor='white', markeredgecolor='#3498db')[0]
         
-        # Add value labels
+        # Create gradient fill area
+        # Get the current line data
+        x = line.get_xdata()
+        y = line.get_ydata()
+        
+        # Fill area under the curve with gradient
+        ax.fill_between(x, y, color='#3498db', alpha=0.3)
+        
+        # Add value labels with better formatting
         for i, v in enumerate(values):
-            ax.text(i, v, f"${v:.0f}", ha='center', va='bottom', fontsize=8)
+            if v > 0:  # Only show labels for non-zero values
+                ax.annotate(
+                    format_currency(v),
+                    (i, v),
+                    xytext=(0, 10),
+                    textcoords='offset points',
+                    ha='center',
+                    va='bottom',
+                    fontsize=9,
+                    fontweight='bold',
+                    color='white',
+                    bbox=dict(boxstyle="round,pad=0.3", fc='#34495e', ec="none", alpha=0.7)
+                )
         
-        # Format
-        ax.set_title('Staking Rewards Over Time', fontsize=14)
-        ax.set_xlabel('Month')
-        ax.set_ylabel('Value (USD)')
-        ax.tick_params(axis='x', rotation=45)
-        ax.grid(True, linestyle='--', alpha=0.7)
+        # Format axes
+        ax.set_title('Staking Rewards Over Time', fontsize=16, fontweight='bold', pad=20)
+        ax.set_xlabel('Month', fontsize=12, fontweight='bold', labelpad=10)
+        ax.set_ylabel('Value (USD)', fontsize=12, fontweight='bold', labelpad=10)
+        ax.tick_params(axis='x', rotation=45, labelsize=10)
+        ax.tick_params(axis='y', labelsize=10)
+        
+        # Add gridlines with better styling
+        ax.grid(True, linestyle='--', alpha=0.3, color='gray')
+        
+        # Format y-axis as currency
+        ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, _: format_currency(x)))
+        
+        # Set background color
+        ax.set_facecolor('#1e272e')
+        fig.patch.set_facecolor('#1e272e')
+        
+        # Add a horizontal line at zero
+        ax.axhline(y=0, color='gray', linestyle='-', alpha=0.3)
+        
         fig.tight_layout()
         
         return fig
@@ -549,28 +686,126 @@ class StakingDashboard(ctk.CTkFrame):
             cumulative_total += forecast_value
             cumulative_values.append(cumulative_total)
         
-        # Create figure
+        # Create figure with a better style
+        plt.style.use('dark_background')
         fig = Figure(figsize=(width/100, height/100), dpi=100)
         ax = fig.add_subplot(111)
         
-        # Create bar chart for monthly forecast
-        ax.bar(months, forecast_values, color='#2ecc71', alpha=0.6, label='Monthly Income')
+        # Create custom colormap for gradient bars
+        color_gradient = []
+        for i in range(len(months)):
+            # Create a gradient effect from lighter to darker green
+            alpha = 0.5 + (i / len(months)) * 0.5
+            color_gradient.append((*matplotlib.colors.to_rgb('#2ecc71'), alpha))
         
-        # Create line chart for cumulative income
+        # Create bar chart for monthly forecast with gradient colors
+        bars = ax.bar(months, forecast_values, color=color_gradient, label='Monthly Income')
+        
+        # Create line chart for cumulative income with improved styling
         ax2 = ax.twinx()
-        ax2.plot(months, cumulative_values, marker='o', linestyle='-', color='#e74c3c', linewidth=2, label='Cumulative Income')
+        cumulative_line = ax2.plot(
+            months, 
+            cumulative_values, 
+            marker='o', 
+            linestyle='-', 
+            color='#e74c3c', 
+            linewidth=2.5, 
+            markersize=6,
+            markerfacecolor='white',
+            markeredgecolor='#e74c3c',
+            label='Cumulative Income'
+        )[0]
         
-        # Format
-        ax.set_title('Forecasted Staking Income', fontsize=14)
-        ax.set_xlabel('Month')
-        ax.set_ylabel('Monthly Income (USD)')
-        ax2.set_ylabel('Cumulative Income (USD)')
-        ax.tick_params(axis='x', rotation=45)
+        # Annotate cumulative values at specific points (start, middle, end)
+        ax2.annotate(
+            format_currency(cumulative_values[0]),
+            (0, cumulative_values[0]),
+            xytext=(0, 10),
+            textcoords='offset points',
+            ha='center',
+            va='bottom',
+            fontsize=9,
+            color='white',
+            bbox=dict(boxstyle="round,pad=0.3", fc='#c0392b', ec="none", alpha=0.7)
+        )
         
-        # Add legend
+        middle_idx = len(cumulative_values) // 2
+        ax2.annotate(
+            format_currency(cumulative_values[middle_idx]),
+            (middle_idx, cumulative_values[middle_idx]),
+            xytext=(0, 10),
+            textcoords='offset points',
+            ha='center',
+            va='bottom',
+            fontsize=9,
+            color='white',
+            bbox=dict(boxstyle="round,pad=0.3", fc='#c0392b', ec="none", alpha=0.7)
+        )
+        
+        ax2.annotate(
+            format_currency(cumulative_values[-1]),
+            (len(cumulative_values)-1, cumulative_values[-1]),
+            xytext=(0, 10),
+            textcoords='offset points',
+            ha='center',
+            va='bottom',
+            fontsize=9,
+            fontweight='bold',
+            color='white',
+            bbox=dict(boxstyle="round,pad=0.3", fc='#c0392b', ec="none", alpha=0.7)
+        )
+        
+        # Add bar value labels for a few key bars
+        for i in [0, len(bars)//2, len(bars)-1]:
+            height = bars[i].get_height()
+            ax.annotate(
+                format_currency(height),
+                xy=(bars[i].get_x() + bars[i].get_width() / 2, height),
+                xytext=(0, 3),
+                textcoords="offset points",
+                ha='center', 
+                va='bottom',
+                fontsize=9,
+                color='white',
+                bbox=dict(boxstyle="round,pad=0.2", fc='#27ae60', ec="none", alpha=0.7)
+            )
+        
+        # Format axes
+        ax.set_title('Forecasted Staking Income', fontsize=16, fontweight='bold', pad=20)
+        ax.set_xlabel('Month', fontsize=12, fontweight='bold', labelpad=10)
+        ax.set_ylabel('Monthly Income (USD)', fontsize=12, fontweight='bold', color='#2ecc71', labelpad=10)
+        ax2.set_ylabel('Cumulative Income (USD)', fontsize=12, fontweight='bold', color='#e74c3c', labelpad=10)
+        
+        # Format tick labels
+        ax.tick_params(axis='x', rotation=45, labelsize=10)
+        ax.tick_params(axis='y', colors='#2ecc71', labelsize=10)
+        ax2.tick_params(axis='y', colors='#e74c3c', labelsize=10)
+        
+        # Format y-axis as currency
+        ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, _: format_currency(x)))
+        ax2.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, _: format_currency(x)))
+        
+        # Add gridlines with better styling
+        ax.grid(True, linestyle='--', alpha=0.3, color='gray')
+        
+        # Set background color
+        ax.set_facecolor('#1e272e')
+        fig.patch.set_facecolor('#1e272e')
+        
+        # Add legend with better styling
         lines1, labels1 = ax.get_legend_handles_labels()
         lines2, labels2 = ax2.get_legend_handles_labels()
-        ax.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
+        legend = ax.legend(
+            lines1 + lines2, 
+            labels1 + labels2, 
+            loc='upper left', 
+            framealpha=0.7,
+            facecolor='#2c3e50',
+            edgecolor='none',
+            fontsize=10
+        )
+        legend.get_texts()[0].set_color('#2ecc71')
+        legend.get_texts()[1].set_color('#e74c3c')
         
         fig.tight_layout()
         
@@ -596,10 +831,22 @@ class StakingDashboard(ctk.CTkFrame):
             monthly_avg = self.calculate_monthly_average_staking(data['transactions'])
             monthly_value = monthly_avg * self.current_prices.get(asset_id, 0)
             
-            # Get estimated APY
+            # Get estimated APY and confidence level
             estimated_apy = data.get('apy', 0)
+            confidence_level = data.get('apy_confidence', 'none')
             
-            self.staking_tree.insert(
+            # Format confidence level for display
+            if confidence_level == "high":
+                confidence_display = "High"
+            elif confidence_level == "medium":
+                confidence_display = "Medium"
+            elif confidence_level == "low":
+                confidence_display = "Low"
+            else:
+                confidence_display = "N/A"
+            
+            # Insert data into treeview
+            row_id = self.staking_tree.insert(
                 "",
                 "end",
                 values=(
@@ -607,9 +854,23 @@ class StakingDashboard(ctk.CTkFrame):
                     f"{total_amount:.8f} {symbol}",
                     f"{last_timestamp}",
                     format_currency(monthly_value),
-                    format_percentage(estimated_apy)
+                    format_percentage(estimated_apy),
+                    confidence_display
                 )
             )
+            
+            # Apply color-coding for APY confidence levels
+            if confidence_level == "high":
+                self.staking_tree.item(row_id, tags=("high_confidence",))
+            elif confidence_level == "medium":
+                self.staking_tree.item(row_id, tags=("medium_confidence",))
+            elif confidence_level == "low":
+                self.staking_tree.item(row_id, tags=("low_confidence",))
+            
+        # Configure tag colors
+        self.staking_tree.tag_configure("high_confidence", background="#2b2b2b", foreground="#27ae60")
+        self.staking_tree.tag_configure("medium_confidence", background="#2b2b2b", foreground="#f39c12")
+        self.staking_tree.tag_configure("low_confidence", background="#2b2b2b", foreground="#e74c3c")
             
     def generate_staking_recommendations(self):
         """Generate staking-specific recommendations."""
@@ -617,6 +878,13 @@ class StakingDashboard(ctk.CTkFrame):
             return
             
         recommendations = []
+        
+        # Add explanation about APY confidence levels
+        recommendations.append("APY Confidence Levels Explained:")
+        recommendations.append("• High: 6+ months of staking data - most reliable APY estimate")
+        recommendations.append("• Medium: 2-6 months of data - reasonably accurate estimate")
+        recommendations.append("• Low: Less than 2 months - preliminary estimate, may change significantly")
+        recommendations.append("• N/A: Insufficient data to calculate APY\n")
         
         # Get staking assets
         staked_assets = list(data['symbol'] for data in self.staking_data['by_asset'].values())
@@ -641,14 +909,21 @@ class StakingDashboard(ctk.CTkFrame):
         if potential_staking:
             recommendations.append(f"• Consider staking your {', '.join(potential_staking)} holdings to earn passive income.")
             
-        # Check APY rates for optimization opportunities
+        # Check APY rates and confidence for optimization opportunities
         low_apy_assets = []
-        if hasattr(self, 'staking_data') and 'by_asset' in self.staking_data:
-            for asset_id, data in self.staking_data['by_asset'].items():
-                apy = data.get('apy', 0)
-                symbol = data['symbol']
-                
-                # Check if APY is lower than typical rates
+        low_confidence_assets = []
+        
+        for asset_id, data in self.staking_data['by_asset'].items():
+            apy = data.get('apy', 0)
+            symbol = data['symbol']
+            confidence = data.get('apy_confidence', 'none')
+            
+            # Low confidence assets - may need more data
+            if confidence in ['low', 'none'] and symbol in staked_assets:
+                low_confidence_assets.append(symbol)
+            
+            # Check if APY is lower than typical rates (only for medium/high confidence)
+            if confidence in ['medium', 'high']:
                 if symbol == "ETH" and apy < 3.5:
                     low_apy_assets.append(symbol)
                 elif symbol == "SOL" and apy < 5.5:
@@ -663,16 +938,20 @@ class StakingDashboard(ctk.CTkFrame):
         if low_apy_assets:
             recommendations.append(f"• Your staking yield for {', '.join(low_apy_assets)} appears lower than average. Consider exploring alternative staking providers for better rates.")
             
+        if low_confidence_assets:
+            recommendations.append(f"• We need more staking history for {', '.join(low_confidence_assets)} to provide accurate APY estimates. Continue recording staking rewards to improve analysis accuracy.")
+            
         # Check staking frequency
         irregular_staking = []
         for asset_id, data in self.staking_data['by_asset'].items():
             transactions = data['transactions']
             symbol = data['symbol']
             
-            # Sort transactions by timestamp
-            sorted_txs = sorted(transactions, key=lambda x: datetime.fromisoformat(x['timestamp']))
-            
-            if len(sorted_txs) > 2:
+            # Only analyze if we have enough transactions
+            if len(transactions) > 2:
+                # Sort transactions by timestamp
+                sorted_txs = sorted(transactions, key=lambda x: datetime.fromisoformat(x['timestamp']))
+                
                 # Calculate time gaps between rewards
                 gaps = []
                 for i in range(1, len(sorted_txs)):
@@ -682,11 +961,14 @@ class StakingDashboard(ctk.CTkFrame):
                     gaps.append(gap_days)
                 
                 # Check for irregularity in staking rewards
-                avg_gap = sum(gaps) / len(gaps)
-                max_gap = max(gaps)
-                
-                if max_gap > avg_gap * 2:
-                    irregular_staking.append(symbol)
+                if len(gaps) >= 2:  # Need at least 2 gaps to check consistency
+                    avg_gap = sum(gaps) / len(gaps)
+                    max_gap = max(gaps)
+                    std_dev = (sum((g - avg_gap) ** 2 for g in gaps) / len(gaps)) ** 0.5
+                    
+                    # Check if max gap is significantly larger than average or high standard deviation
+                    if max_gap > avg_gap * 2 or std_dev > avg_gap * 0.5:
+                        irregular_staking.append(symbol)
         
         if irregular_staking:
             recommendations.append(f"• Your staking rewards for {', '.join(irregular_staking)} show irregular intervals. Check if your staking setup is still active and properly configured.")
@@ -707,9 +989,13 @@ class StakingDashboard(ctk.CTkFrame):
         if self.staking_data['monthly_average'] > 0:
             yearly_projection = self.staking_data['monthly_average'] * 12
             recommendations.append(f"• At your current staking rate, you're projected to earn approximately {format_currency(yearly_projection)} in staking rewards over the next year.")
+            
+            # Suggest compounding for significant staking rewards
+            if yearly_projection > 500:  # Only suggest if meaningful amount
+                recommendations.append(f"• Consider compounding your staking rewards by re-staking them regularly to maximize your earnings. This could significantly increase your returns over time.")
         
         # If no specific recommendations, add general advice
-        if not recommendations:
+        if len(recommendations) <= 5:  # Only have the confidence level explanation
             recommendations.append("Your staking setup appears to be well-configured. Continue monitoring for optimal yields and consider compounding your rewards for maximum growth.")
             
         # Update recommendations text
