@@ -972,20 +972,49 @@ class AssetManagement(ctk.CTkFrame):
         add_button.grid(row=3, column=0, padx=20, pady=(20, 20), sticky="ew")
         
         # STAKING INCOME TAB
-        # Amount entry
-        stake_amount_frame = ctk.CTkFrame(tab_staking)
-        stake_amount_frame.grid(row=0, column=0, padx=20, pady=(20, 0), sticky="ew")
+        # Input mode selection with radio buttons
+        stake_mode_frame = ctk.CTkFrame(tab_staking)
+        stake_mode_frame.grid(row=0, column=0, padx=20, pady=(20, 0), sticky="ew")
         
-        stake_amount_label = ctk.CTkLabel(
-            stake_amount_frame,
+        stake_mode_label = ctk.CTkLabel(
+            stake_mode_frame,
+            text="Input Method:",
+            font=ctk.CTkFont(size=14, weight="bold")
+        )
+        stake_mode_label.grid(row=0, column=0, padx=20, pady=(10, 5), sticky="w")
+        
+        stake_mode_var = ctk.StringVar(value="total")
+        
+        stake_mode_total = ctk.CTkRadioButton(
+            stake_mode_frame,
+            text="Enter new total amount",
+            variable=stake_mode_var,
+            value="total"
+        )
+        stake_mode_total.grid(row=1, column=0, padx=40, pady=(5, 5), sticky="w")
+        
+        stake_mode_rewards = ctk.CTkRadioButton(
+            stake_mode_frame,
+            text="Enter staking rewards directly",
+            variable=stake_mode_var,
+            value="rewards"
+        )
+        stake_mode_rewards.grid(row=2, column=0, padx=40, pady=(5, 10), sticky="w")
+        
+        # Frame for total amount input
+        stake_total_frame = ctk.CTkFrame(tab_staking)
+        stake_total_frame.grid(row=1, column=0, padx=20, pady=(10, 0), sticky="ew")
+        
+        stake_total_label = ctk.CTkLabel(
+            stake_total_frame,
             text="New Total Amount (including staking rewards):",
             font=ctk.CTkFont(size=14)
         )
-        stake_amount_label.grid(row=0, column=0, padx=20, pady=(10, 5), sticky="w")
+        stake_total_label.grid(row=0, column=0, padx=20, pady=(10, 5), sticky="w")
         
         # Display current amount for reference
         current_amount_info = ctk.CTkLabel(
-            stake_amount_frame,
+            stake_total_frame,
             text=f"Current amount: {holding['amount']:.8f} {holding['symbol']}",
             font=ctk.CTkFont(size=12),
             text_color="gray"
@@ -993,27 +1022,80 @@ class AssetManagement(ctk.CTkFrame):
         current_amount_info.grid(row=1, column=0, padx=20, pady=(0, 5), sticky="w")
         
         # Helpful information text
-        info_text = ctk.CTkLabel(
-            stake_amount_frame,
+        total_info_text = ctk.CTkLabel(
+            stake_total_frame,
             text="Enter the new total amount after adding staking rewards. The system will calculate the difference as staking income.",
             font=ctk.CTkFont(size=12),
             text_color="gray",
             wraplength=380
         )
-        info_text.grid(row=2, column=0, padx=20, pady=(0, 5), sticky="w")
+        total_info_text.grid(row=2, column=0, padx=20, pady=(0, 5), sticky="w")
         
-        stake_amount_entry = ctk.CTkEntry(
-            stake_amount_frame,
+        stake_total_entry = ctk.CTkEntry(
+            stake_total_frame,
             width=400,
             placeholder_text=f"Enter the new total amount including staking rewards"
         )
-        stake_amount_entry.grid(row=3, column=0, padx=20, pady=(5, 10), sticky="ew")
+        stake_total_entry.grid(row=3, column=0, padx=20, pady=(5, 10), sticky="ew")
         # Bind comma-to-period conversion for German keyboard users
-        stake_amount_entry.bind("<Key>", convert_comma_to_period)
+        stake_total_entry.bind("<Key>", convert_comma_to_period)
+        
+        # Frame for direct rewards input
+        stake_rewards_frame = ctk.CTkFrame(tab_staking)
+        stake_rewards_frame.grid(row=2, column=0, padx=20, pady=(10, 0), sticky="ew")
+        
+        stake_rewards_label = ctk.CTkLabel(
+            stake_rewards_frame,
+            text="Staking Rewards Amount:",
+            font=ctk.CTkFont(size=14)
+        )
+        stake_rewards_label.grid(row=0, column=0, padx=20, pady=(10, 5), sticky="w")
+        
+        # Display current amount for reference
+        current_amount_rewards_info = ctk.CTkLabel(
+            stake_rewards_frame,
+            text=f"Current amount: {holding['amount']:.8f} {holding['symbol']}",
+            font=ctk.CTkFont(size=12),
+            text_color="gray"
+        )
+        current_amount_rewards_info.grid(row=1, column=0, padx=20, pady=(0, 5), sticky="w")
+        
+        # Helpful information text
+        rewards_info_text = ctk.CTkLabel(
+            stake_rewards_frame,
+            text="Enter only the staking rewards amount. This will be added to your current balance.",
+            font=ctk.CTkFont(size=12),
+            text_color="gray",
+            wraplength=380
+        )
+        rewards_info_text.grid(row=2, column=0, padx=20, pady=(0, 5), sticky="w")
+        
+        stake_rewards_entry = ctk.CTkEntry(
+            stake_rewards_frame,
+            width=400,
+            placeholder_text=f"Enter only the staking rewards amount"
+        )
+        stake_rewards_entry.grid(row=3, column=0, padx=20, pady=(5, 10), sticky="ew")
+        # Bind comma-to-period conversion for German keyboard users
+        stake_rewards_entry.bind("<Key>", convert_comma_to_period)
+        
+        # Function to show/hide frames based on selected mode
+        def update_stake_input_mode(*args):
+            if stake_mode_var.get() == "total":
+                stake_total_frame.grid(row=1, column=0, padx=20, pady=(10, 0), sticky="ew")
+                stake_rewards_frame.grid_forget()
+            else:
+                stake_total_frame.grid_forget()
+                stake_rewards_frame.grid(row=1, column=0, padx=20, pady=(10, 0), sticky="ew")
+        
+        # Set initial state
+        update_stake_input_mode()
+        # Bind to radio button changes
+        stake_mode_var.trace_add("write", update_stake_input_mode)
         
         # Notes entry
         stake_notes_frame = ctk.CTkFrame(tab_staking)
-        stake_notes_frame.grid(row=1, column=0, padx=20, pady=(10, 0), sticky="ew")
+        stake_notes_frame.grid(row=3, column=0, padx=20, pady=(10, 0), sticky="ew")
         
         stake_notes_label = ctk.CTkLabel(
             stake_notes_frame,
@@ -1036,8 +1118,9 @@ class AssetManagement(ctk.CTkFrame):
             command=lambda: self.add_staking_income(
                 dialog,
                 holding,
-                stake_amount_entry.get(),
-                stake_notes_entry.get("0.0", "end")
+                stake_total_entry.get() if stake_mode_var.get() == "total" else stake_rewards_entry.get(),
+                stake_notes_entry.get("0.0", "end"),
+                stake_mode_var.get()
             ),
             width=400
         )
@@ -1159,25 +1242,39 @@ class AssetManagement(ctk.CTkFrame):
         if self.refresh_callback:
             self.refresh_callback()
             
-    def add_staking_income(self, dialog, holding, amount_str, notes):
+    def add_staking_income(self, dialog, holding, amount_str, notes, input_mode="total"):
         """Add staking income to an existing holding."""
         try:
             # Use parse_numeric_input to handle comma decimal separators
-            new_total = float(parse_numeric_input(amount_str))
+            amount = float(parse_numeric_input(amount_str))
             
-            # Ensure the new total is greater than the current amount
-            if new_total <= holding['amount']:
-                messagebox.showerror("Error", "New total amount must be greater than the current amount.", parent=dialog)
-                return
+            if input_mode == "total":
+                # Ensure the new total is greater than the current amount
+                if amount <= holding['amount']:
+                    messagebox.showerror("Error", "New total amount must be greater than the current amount.", parent=dialog)
+                    return
+                    
+                # Calculate staking income as the difference
+                staking_amount = amount - holding['amount']
+                # New total is the entered amount
+                new_total = amount
+            else:  # rewards mode
+                # Ensure the rewards amount is positive
+                if amount <= 0:
+                    messagebox.showerror("Error", "Staking rewards amount must be positive.", parent=dialog)
+                    return
                 
-            # Calculate staking income as the difference
-            staking_amount = new_total - holding['amount']
+                # Staking amount is directly entered
+                staking_amount = amount
+                # Calculate new total
+                new_total = holding['amount'] + amount
             
             # Update holding with new total
             self.db.update_holding(
                 self.user['id'],
                 holding['id'],
                 new_total,
+                holding['purchase_price_per_unit'],  # Pass the current purchase price to preserve it
                 notes=notes.strip() if notes else None
             )
             
